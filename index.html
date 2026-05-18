@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keryx Reach — Evangelism Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ink: #0f0e0d; --parchment: #f5f0e8; --gold: #c8952a; --gold-light: #e8b84b;
+    --ember: #c0392b; --moss: #2d6a4f; --stone: #6b6560; --stone-light: #9e9690;
+    --cream: #faf7f2; --border: #ddd8ce; --shadow: rgba(15,14,13,0.12);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Mono',monospace; background:var(--parchment); color:var(--ink); min-height:100vh; }
+
+  /* AUTH */
+  #auth-screen { min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--ink); position:relative; overflow:hidden; }
+  #auth-screen::before { content:''; position:absolute; inset:0; background:radial-gradient(ellipse at 30% 50%,rgba(200,149,42,0.08),transparent 60%),radial-gradient(ellipse at 70% 20%,rgba(200,149,42,0.05),transparent 50%); }
+  .auth-card { width:420px; max-width:95vw; background:var(--cream); border:1px solid var(--border); position:relative; z-index:1; }
+  .auth-header { padding:40px 40px 32px; border-bottom:1px solid var(--border); text-align:center; }
+  .auth-logo { font-family:'Cormorant Garamond',serif; font-size:42px; font-weight:700; color:var(--gold); display:block; margin-bottom:6px; }
+  .auth-tagline { font-size:9px; letter-spacing:0.2em; text-transform:uppercase; color:var(--stone); }
+  .auth-verse { font-family:'Cormorant Garamond',serif; font-style:italic; font-size:12px; color:var(--stone-light); margin-top:12px; line-height:1.5; }
+  .auth-body { padding:32px 40px; }
+  .auth-tabs { display:flex; margin-bottom:28px; border-bottom:1px solid var(--border); }
+  .auth-tab { flex:1; padding:10px; text-align:center; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; cursor:pointer; color:var(--stone); border-bottom:2px solid transparent; margin-bottom:-1px; transition:all 0.2s; }
+  .auth-tab.active { color:var(--gold); border-bottom-color:var(--gold); }
+  .auth-form { display:none; }
+  .auth-form.active { display:block; }
+  .auth-error { background:#fde8e6; border:1px solid #f5b8b3; border-left:3px solid var(--ember); padding:10px 14px; font-size:11px; color:var(--ember); margin-bottom:16px; display:none; }
+  .auth-success { background:#e8f5ed; border:1px solid #a8d5b8; border-left:3px solid var(--moss); padding:10px 14px; font-size:11px; color:var(--moss); margin-bottom:16px; display:none; }
+  .auth-footer { padding:16px 40px 32px; text-align:center; font-size:10px; color:var(--stone-light); line-height:1.6; }
+
+  /* SHARED FORM */
+  .form-group { margin-bottom:16px; }
+  .form-label { display:block; font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:var(--stone); margin-bottom:7px; font-weight:500; }
+  .form-input,.form-select,.form-textarea { width:100%; padding:11px 14px; font-family:'DM Mono',monospace; font-size:12px; border:1px solid var(--border); background:white; color:var(--ink); outline:none; transition:border-color 0.15s; }
+  .form-input:focus,.form-select:focus,.form-textarea:focus { border-color:var(--gold); }
+  .form-textarea { resize:vertical; min-height:80px; }
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-check { display:flex; align-items:center; gap:10px; }
+  .form-check input { width:auto; }
+  .form-check label { font-size:11px; color:var(--stone); margin:0; }
+
+  /* BUTTONS */
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:11px 20px; font-family:'DM Mono',monospace; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; border:none; cursor:pointer; transition:all 0.2s; }
+  .btn-primary { background:var(--gold); color:var(--ink); font-weight:500; }
+  .btn-primary:hover { background:var(--gold-light); }
+  .btn-ghost { background:transparent; color:var(--stone); border:1px solid var(--border); }
+  .btn-ghost:hover { border-color:var(--stone); color:var(--ink); }
+  .btn-danger { background:var(--ember); color:white; }
+  .btn-success { background:var(--moss); color:white; }
+  .btn-sm { padding:5px 12px; font-size:9px; }
+  .btn-full { width:100%; }
+
+  /* APP */
+  #app { display:none; }
+  .sidebar { position:fixed; left:0; top:0; bottom:0; width:240px; background:var(--ink); display:flex; flex-direction:column; z-index:100; }
+  .sidebar-brand { padding:32px 24px 28px; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .brand-word { font-family:'Cormorant Garamond',serif; font-size:28px; font-weight:700; color:var(--gold); display:block; }
+  .brand-sub { font-size:9px; color:var(--stone-light); letter-spacing:0.2em; text-transform:uppercase; margin-top:4px; display:block; }
+  .sidebar-user { padding:14px 24px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .user-email { font-size:10px; color:var(--stone); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+  .logout-btn { background:none; border:1px solid rgba(255,255,255,0.1); color:var(--stone); font-family:'DM Mono',monospace; font-size:8px; letter-spacing:0.08em; text-transform:uppercase; padding:4px 8px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .logout-btn:hover { color:var(--ember); border-color:var(--ember); }
+  .sidebar-verse { padding:16px 24px; font-family:'Cormorant Garamond',serif; font-style:italic; font-size:11px; color:var(--stone); line-height:1.6; border-bottom:1px solid rgba(255,255,255,0.05); }
+  .sidebar-nav { padding:16px 0; flex:1; }
+  .nav-item { display:flex; align-items:center; gap:12px; padding:11px 24px; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--stone); cursor:pointer; transition:all 0.2s; border-left:2px solid transparent; }
+  .nav-item:hover { color:#fff; background:rgba(255,255,255,0.04); }
+  .nav-item.active { color:var(--gold); border-left-color:var(--gold); background:rgba(200,149,42,0.06); }
+  .nav-icon { font-size:14px; width:18px; text-align:center; }
+  .sidebar-stats { padding:20px 24px; border-top:1px solid rgba(255,255,255,0.08); }
+  .stat-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .stat-label { font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:var(--stone); }
+  .stat-value { font-size:16px; color:var(--gold); font-weight:500; }
+
+  .main { margin-left:240px; min-height:100vh; display:flex; flex-direction:column; }
+  .topbar { background:var(--cream); border-bottom:1px solid var(--border); padding:16px 36px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:50; }
+  .page-title { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:600; }
+  .content { padding:32px 36px; flex:1; }
+
+  .pipeline { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+  .pipeline-col { background:var(--cream); border:1px solid var(--border); border-top:3px solid var(--border); }
+  .pipeline-col.first_contact { border-top-color:var(--stone-light); }
+  .pipeline-col.follow_up { border-top-color:var(--gold); }
+  .pipeline-col.decision { border-top-color:#e67e22; }
+  .pipeline-col.discipleship { border-top-color:var(--moss); }
+  .pipeline-col.unresponsive { border-top-color:var(--ember); }
+  .pipeline-header { padding:14px 16px 10px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .pipeline-label { font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:var(--stone); font-weight:500; }
+  .pipeline-count { font-size:11px; color:var(--stone-light); background:var(--border); padding:2px 7px; border-radius:20px; }
+  .pipeline-cards { padding:12px; min-height:120px; }
+  .contact-card { background:white; border:1px solid var(--border); padding:12px 14px; margin-bottom:8px; cursor:pointer; transition:all 0.15s; position:relative; }
+  .contact-card:hover { border-color:var(--gold); box-shadow:0 2px 8px var(--shadow); transform:translateY(-1px); }
+  .contact-card.urgent::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--ember); }
+  .card-name { font-family:'Cormorant Garamond',serif; font-size:15px; font-weight:600; margin-bottom:4px; }
+  .card-meta { font-size:9px; color:var(--stone-light); }
+  .card-reached { display:inline-block; margin-top:6px; font-size:8px; letter-spacing:0.1em; text-transform:uppercase; padding:2px 6px; background:var(--parchment); color:var(--stone); border:1px solid var(--border); }
+
+  .filters { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+  .filter-btn { padding:5px 14px; font-family:'DM Mono',monospace; font-size:9px; letter-spacing:0.1em; text-transform:uppercase; border:1px solid var(--border); background:transparent; color:var(--stone); cursor:pointer; transition:all 0.15s; }
+  .filter-btn.active,.filter-btn:hover { background:var(--ink); color:var(--gold); border-color:var(--ink); }
+
+  .contacts-table { width:100%; border-collapse:collapse; background:var(--cream); border:1px solid var(--border); }
+  .contacts-table th { padding:11px 16px; text-align:left; font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:var(--stone); border-bottom:1px solid var(--border); background:white; }
+  .contacts-table td { padding:13px 16px; border-bottom:1px solid var(--border); font-size:12px; vertical-align:middle; }
+  .contacts-table tr:hover td { background:white; }
+  .status-badge { display:inline-block; padding:3px 10px; font-size:8px; letter-spacing:0.12em; text-transform:uppercase; font-weight:500; }
+  .status-first_contact { background:#f0eeea; color:var(--stone); }
+  .status-follow_up { background:#fef3e2; color:#8b5e1a; }
+  .status-decision { background:#fef0e6; color:#8b4e14; }
+  .status-discipleship { background:#e8f5ed; color:var(--moss); }
+  .status-unresponsive { background:#fde8e6; color:var(--ember); }
+  .urgent-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--ember); margin-right:6px; animation:pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .modal-overlay { position:fixed; inset:0; background:rgba(15,14,13,0.7); z-index:200; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+  .modal-overlay.open { opacity:1; pointer-events:all; }
+  .modal { background:var(--cream); width:560px; max-width:95vw; max-height:90vh; overflow-y:auto; border:1px solid var(--border); transform:translateY(20px); transition:transform 0.2s; }
+  .modal-overlay.open .modal { transform:translateY(0); }
+  .modal-header { padding:24px 28px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .modal-title { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:600; }
+  .modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--stone); padding:4px 8px; }
+  .modal-body { padding:24px 28px; }
+  .modal-footer { padding:16px 28px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; }
+
+  .detail-section { margin-bottom:24px; padding-bottom:24px; border-bottom:1px solid var(--border); }
+  .detail-section:last-child { border-bottom:none; margin-bottom:0; }
+  .detail-section-title { font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:var(--stone); margin-bottom:12px; }
+  .ai-suggestion { background:linear-gradient(135deg,#fef9f0,#fef3e2); border:1px solid #e8c874; border-left:3px solid var(--gold); padding:14px 16px; font-size:12px; line-height:1.6; }
+  .ai-badge { font-size:8px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gold); font-weight:500; margin-bottom:6px; display:block; }
+  .notes-list { display:flex; flex-direction:column; gap:10px; }
+  .note-item { background:white; border:1px solid var(--border); padding:12px 14px; }
+  .note-meta { font-size:9px; color:var(--stone-light); margin-bottom:6px; }
+  .note-text { font-size:12px; line-height:1.5; }
+
+  .toast { position:fixed; bottom:24px; right:24px; background:var(--ink); color:white; padding:12px 20px; font-size:11px; z-index:999; transform:translateY(80px); opacity:0; transition:all 0.3s; border-left:3px solid var(--gold); }
+  .toast.show { transform:translateY(0); opacity:1; }
+
+  .tasks-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+  .task-card { background:var(--cream); border:1px solid var(--border); padding:20px; border-top:3px solid var(--gold); }
+  .task-contact-name { font-family:'Cormorant Garamond',serif; font-size:18px; font-weight:600; margin-bottom:6px; }
+  .task-type-badge { display:inline-block; padding:3px 10px; font-size:8px; letter-spacing:0.12em; text-transform:uppercase; background:var(--parchment); color:var(--stone); border:1px solid var(--border); margin-bottom:12px; }
+  .task-ai { font-size:11px; color:var(--stone); line-height:1.5; margin-bottom:14px; }
+  .task-due { font-size:10px; color:var(--stone-light); margin-bottom:10px; }
+  .task-actions { display:flex; gap:8px; }
+
+  .empty-state { text-align:center; padding:60px 20px; color:var(--stone); }
+  .empty-icon { font-size:40px; margin-bottom:16px; opacity:0.4; }
+  .empty-title { font-family:'Cormorant Garamond',serif; font-size:20px; margin-bottom:8px; color:var(--ink); }
+  .empty-sub { font-size:11px; line-height:1.6; }
+
+  .team-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
+  .team-card { background:var(--cream); border:1px solid var(--border); padding:24px; }
+  .team-avatar { width:48px; height:48px; background:var(--ink); color:var(--gold); font-family:'Cormorant Garamond',serif; font-size:20px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
+  .team-name { font-family:'Cormorant Garamond',serif; font-size:18px; font-weight:600; margin-bottom:4px; }
+  .team-role { font-size:9px; letter-spacing:0.12em; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
+  .team-meta { font-size:11px; color:var(--stone); }
+  .invite-box { background:white; border:1px solid var(--border); padding:20px; margin-top:20px; }
+  .invite-title { font-size:9px; letter-spacing:0.15em; text-transform:uppercase; color:var(--stone); margin-bottom:12px; }
+  .invite-row { display:flex; gap:10px; }
+  .invite-row .form-input { flex:1; }
+
+  .loading { display:flex; align-items:center; justify-content:center; height:200px; color:var(--stone-light); font-size:11px; letter-spacing:0.1em; }
+  .view { display:none; }
+  .view.active { display:block; }
+  select option { background:white; }
+</style>
+</head>
+<body>
+
+<!-- AUTH -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-header">
+      <span class="auth-logo">Keryx</span>
+      <span class="auth-tagline">Reach · Evangelism OS</span>
+      <p class="auth-verse">"How shall they hear without a preacher?" — Romans 10:14</p>
+    </div>
+    <div class="auth-body">
+      <div class="auth-tabs">
+        <div class="auth-tab active" onclick="switchTab('login')">Sign In</div>
+        <div class="auth-tab" onclick="switchTab('signup')">Create Account</div>
+      </div>
+      <!-- LOGIN -->
+      <div class="auth-form active" id="form-login">
+        <div class="auth-error" id="login-error"></div>
+        <div class="auth-success" id="login-success"></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="login-email" type="email" placeholder="you@church.org" /></div>
+        <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="login-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')handleLogin()" /></div>
+        <button class="btn btn-primary btn-full" onclick="handleLogin()" style="margin-top:8px;">Sign In</button>
+        <div style="text-align:center;margin-top:16px;"><span style="font-size:10px;color:var(--stone-light);cursor:pointer;" onclick="handleForgotPassword()">Forgot password?</span></div>
+      </div>
+      <!-- SIGNUP -->
+      <div class="auth-form" id="form-signup">
+        <div class="auth-error" id="signup-error"></div>
+        <div class="auth-success" id="signup-success"></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="signup-name" placeholder="Pastor James" /></div>
+          <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="signup-role"><option value="evangelist">Evangelist</option><option value="leader">Team Leader</option><option value="admin">Admin / Pastor</option></select></div>
+        </div>
+        <div class="form-group"><label class="form-label">Church / Organisation</label><input class="form-input" id="signup-church" placeholder="Kampala Pentecostal Church" /></div>
+        <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="signup-email" type="email" placeholder="you@church.org" /></div>
+        <div class="form-group"><label class="form-label">Password *</label><input class="form-input" id="signup-password" type="password" placeholder="Min. 6 characters" /></div>
+        <button class="btn btn-primary btn-full" onclick="handleSignup()" style="margin-top:8px;">Create Account</button>
+      </div>
+    </div>
+    <div class="auth-footer">Keryx Reach · Evangelism contact management<br>Your data is private and secure.</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><span class="brand-word">Keryx</span><span class="brand-sub">Reach · Evangelism OS</span></div>
+    <div class="sidebar-user"><span class="user-email" id="user-email-display">—</span><button class="logout-btn" onclick="handleLogout()">Logout</button></div>
+    <div class="sidebar-verse">"How shall they hear without a preacher?" — Romans 10:14</div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" onclick="showView('pipeline',this)"><span class="nav-icon">◈</span> Pipeline</div>
+      <div class="nav-item" onclick="showView('contacts',this)"><span class="nav-icon">◎</span> All Contacts</div>
+      <div class="nav-item" onclick="showView('tasks',this)"><span class="nav-icon">◷</span> Follow-ups</div>
+      <div class="nav-item" onclick="showView('team',this)"><span class="nav-icon">◉</span> Team</div>
+    </nav>
+    <div class="sidebar-stats">
+      <div class="stat-row"><span class="stat-label">Total Contacts</span><span class="stat-value" id="stat-total">—</span></div>
+      <div class="stat-row"><span class="stat-label">This Week</span><span class="stat-value" id="stat-week">—</span></div>
+      <div class="stat-row"><span class="stat-label">Decisions</span><span class="stat-value" id="stat-decisions">—</span></div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h1 class="page-title" id="page-title">Contact Pipeline</h1>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" onclick="openTeamModal()">+ Team Member</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ Log Contact</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="view active" id="view-pipeline"><div class="pipeline" id="pipeline-board"><div class="loading">Loading...</div></div></div>
+      <div class="view" id="view-contacts">
+        <div class="filters">
+          <button class="filter-btn active" onclick="filterContacts('all',this)">All</button>
+          <button class="filter-btn" onclick="filterContacts('first_contact',this)">First Contact</button>
+          <button class="filter-btn" onclick="filterContacts('follow_up',this)">Follow-up</button>
+          <button class="filter-btn" onclick="filterContacts('decision',this)">Decision</button>
+          <button class="filter-btn" onclick="filterContacts('discipleship',this)">Discipleship</button>
+          <button class="filter-btn" onclick="filterContacts('unresponsive',this)">Unresponsive</button>
+        </div>
+        <table class="contacts-table">
+          <thead><tr><th>Name</th><th>Phone</th><th>Location</th><th>Reached Via</th><th>Status</th><th>Logged</th><th></th></tr></thead>
+          <tbody id="contacts-tbody"><tr><td colspan="7"><div class="loading">Loading...</div></td></tr></tbody>
+        </table>
+      </div>
+      <div class="view" id="view-tasks"><div class="tasks-grid" id="tasks-grid"><div class="loading">Loading...</div></div></div>
+      <div class="view" id="view-team">
+        <div class="team-grid" id="team-grid"><div class="loading">Loading...</div></div>
+        <div class="invite-box">
+          <div class="invite-title">Invite Team Member</div>
+          <p style="font-size:11px;color:var(--stone);margin-bottom:12px;">Share this link with your team — they'll create their own account:</p>
+          <div class="invite-row">
+            <input class="form-input" id="invite-link" readonly value="" />
+            <button class="btn btn-primary" style="width:auto;" onclick="copyInviteLink()">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ADD CONTACT MODAL -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-header"><h2 class="modal-title">Log Gospel Contact</h2><button class="modal-close" onclick="closeModal('add-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="f-name" placeholder="e.g. Sarah Nakato" /></div>
+        <div class="form-group"><label class="form-label">Phone Number</label><input class="form-input" id="f-phone" placeholder="+256 700 000000" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Location</label><input class="form-input" id="f-location" placeholder="e.g. Kampala, Nakawa" /></div>
+        <div class="form-group">
+          <label class="form-label">How They Were Reached *</label>
+          <select class="form-select" id="f-how">
+            <option value="">Select...</option>
+            <option value="street evangelism">Street Evangelism</option>
+            <option value="church event">Church Event</option>
+            <option value="personal">Personal Relationship</option>
+            <option value="online">Online / Social Media</option>
+            <option value="crusade">Crusade / Outreach</option>
+            <option value="home visit">Home Visit</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Initial Status</label>
+        <select class="form-select" id="f-status">
+          <option value="first_contact">First Contact</option>
+          <option value="follow_up">Needs Follow-up</option>
+          <option value="decision">Made a Decision</option>
+          <option value="discipleship">In Discipleship</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="f-notes" placeholder="What happened? What was shared? Any context..."></textarea></div>
+      <div class="form-group"><label class="form-label">Logged By</label><select class="form-select" id="f-loggedby"><option value="">— Select team member —</option></select></div>
+      <div class="form-check"><input type="checkbox" id="f-urgent" /><label for="f-urgent">Mark as urgent (crisis / immediate need)</label></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('add-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveContact()">Log Contact</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal" style="width:620px;">
+    <div class="modal-header"><h2 class="modal-title" id="detail-name">Contact Detail</h2><button class="modal-close" onclick="closeModal('detail-modal')">✕</button></div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer" id="detail-footer"></div>
+  </div>
+</div>
+
+<!-- TEAM MODAL -->
+<div class="modal-overlay" id="team-modal">
+  <div class="modal">
+    <div class="modal-header"><h2 class="modal-title">Add Team Member</h2><button class="modal-close" onclick="closeModal('team-modal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="tm-name" placeholder="e.g. Pastor James" /></div>
+        <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="tm-role"><option value="evangelist">Evangelist</option><option value="leader">Team Leader</option><option value="admin">Admin / Pastor</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="tm-phone" placeholder="+256 700 000000" /></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="tm-email" placeholder="email@church.org" /></div>
+      </div>
+      <div class="form-group"><label class="form-label">Church / Organisation</label><input class="form-input" id="tm-church" placeholder="e.g. Kampala Pentecostal Church" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('team-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTeamMember()">Add Member</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL='https://jjnigizxxrxmwglnjwak.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpqbmlnaXp4eHJ4bXdnbG5qd2FrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzQzMjcsImV4cCI6MjA4NzgxMDMyN30.VbhwrT1INltlzSp0shSpZ69KudsiGHvTBmnKbsoN-AU';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+let allContacts=[],allTeam=[],allTasks=[],currentFilter='all';
+const STATUSES=['first_contact','follow_up','decision','discipleship','unresponsive'];
+const STATUS_LABELS={first_contact:'First Contact',follow_up:'Follow-up',decision:'Decision',discipleship:'Discipleship',unresponsive:'Unresponsive'};
+
+// AUTH
+function switchTab(tab){
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',(i===0&&tab==='login')||(i===1&&tab==='signup')));
+  document.getElementById('form-login').classList.toggle('active',tab==='login');
+  document.getElementById('form-signup').classList.toggle('active',tab==='signup');
+}
+function showAuthMsg(id,msg,type){
+  const el=document.getElementById(id+'-'+type);
+  el.textContent=msg; el.style.display='block';
+  if(type==='error') setTimeout(()=>el.style.display='none',5000);
+}
+async function handleLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-password').value;
+  if(!email||!pass){showAuthMsg('login','Please enter your email and password.','error');return;}
+  const{error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){showAuthMsg('login',error.message,'error');}
+}
+async function handleSignup(){
+  const name=document.getElementById('signup-name').value.trim();
+  const email=document.getElementById('signup-email').value.trim();
+  const pass=document.getElementById('signup-password').value;
+  const role=document.getElementById('signup-role').value;
+  const church=document.getElementById('signup-church').value.trim();
+  if(!name||!email||!pass){showAuthMsg('signup','Please fill in all required fields.','error');return;}
+  if(pass.length<6){showAuthMsg('signup','Password must be at least 6 characters.','error');return;}
+  const{data,error}=await sb.auth.signUp({email,password:pass});
+  if(error){showAuthMsg('signup',error.message,'error');return;}
+  if(data.user){
+    await sb.from('keryx_team_members').insert({full_name:name,email,role,church_name:church||null,auth_user_id:data.user.id});
+  }
+  showAuthMsg('signup','Account created! Check your email to confirm, then sign in.','success');
+}
+async function handleForgotPassword(){
+  const email=document.getElementById('login-email').value.trim();
+  if(!email){showAuthMsg('login','Enter your email address first.','error');return;}
+  await sb.auth.resetPasswordForEmail(email,{redirectTo:window.location.href});
+  showAuthMsg('login','Password reset email sent. Check your inbox.','success');
+}
+async function handleLogout(){
+  await sb.auth.signOut();
+}
+
+sb.auth.onAuthStateChange((event,session)=>{
+  if(session){
+    document.getElementById('auth-screen').style.display='none';
+    document.getElementById('app').style.display='block';
+    document.getElementById('user-email-display').textContent=session.user.email;
+    document.getElementById('invite-link').value=window.location.href;
+    loadAll();
+  } else {
+    document.getElementById('app').style.display='none';
+    document.getElementById('auth-screen').style.display='flex';
+    allContacts=[]; allTeam=[]; allTasks=[];
+  }
+});
+
+function copyInviteLink(){
+  navigator.clipboard.writeText(window.location.href);
+  toast('Link copied — share it with your team');
+}
+
+// APP
+function toast(msg,type='success'){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.style.borderLeftColor=type==='error'?'#c0392b':'#c8952a';
+  el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),3000);
+}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function openAddModal(){populateTeamSelect('f-loggedby');openModal('add-modal');}
+function openTeamModal(){openModal('team-modal');}
+
+function showView(view,el){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('view-'+view).classList.add('active');
+  if(el)el.classList.add('active');
+  const titles={pipeline:'Contact Pipeline',contacts:'All Contacts',tasks:'Follow-up Tasks',team:'Evangelism Team'};
+  document.getElementById('page-title').textContent=titles[view];
+  if(view==='pipeline')renderPipeline();
+  if(view==='contacts')renderContactsTable();
+  if(view==='tasks')renderTasks();
+  if(view==='team')renderTeam();
+}
+
+async function loadAll(){
+  const[c,t,tasks]=await Promise.all([
+    sb.from('keryx_contacts').select('*').order('created_at',{ascending:false}),
+    sb.from('keryx_team_members').select('*').order('full_name'),
+    sb.from('keryx_follow_up_tasks').select('*,keryx_contacts(*),keryx_team_members(*)').order('created_at',{ascending:false})
+  ]);
+  allContacts=c.data||[]; allTeam=t.data||[]; allTasks=tasks.data||[];
+  updateStats(); renderPipeline();
+}
+
+function updateStats(){
+  document.getElementById('stat-total').textContent=allContacts.length;
+  const w=new Date(Date.now()-7*86400000);
+  document.getElementById('stat-week').textContent=allContacts.filter(c=>new Date(c.created_at)>w).length;
+  document.getElementById('stat-decisions').textContent=allContacts.filter(c=>c.status==='decision'||c.status==='discipleship').length;
+}
+
+function aiSuggestion(contact){
+  const days=Math.floor((Date.now()-new Date(contact.created_at))/86400000);
+  if(contact.is_urgent)return'⚠ URGENT: Immediate need. A pastor should reach out today — do not delay.';
+  const s={first_contact:days<3?'Reach out within 48 hours while the conversation is fresh. Send a warm greeting and share a relevant scripture.':`It has been ${days} days since first contact. A personal call or visit is strongly recommended.`,follow_up:'Share a short devotional and invite them to a church event or small group this week.',decision:'A decision was made! Connect them with a discipleship partner and introduce them to a Bible study group.',discipleship:'Continue investing consistently. Check on their Bible reading, prayer life, and church community connection.',unresponsive:'Try a different approach — an in-person visit rather than messages. Pray specifically for an open door.'};
+  return s[contact.status]||'Follow up with this contact soon.';
+}
+
+function renderPipeline(){
+  document.getElementById('pipeline-board').innerHTML=STATUSES.map(status=>{
+    const contacts=allContacts.filter(c=>c.status===status);
+    return`<div class="pipeline-col ${status}">
+      <div class="pipeline-header"><span class="pipeline-label">${STATUS_LABELS[status]}</span><span class="pipeline-count">${contacts.length}</span></div>
+      <div class="pipeline-cards">${contacts.length===0?'<div style="padding:20px 0;text-align:center;font-size:10px;color:var(--stone-light);">None</div>':contacts.map(c=>`
+        <div class="contact-card${c.is_urgent?' urgent':''}" onclick="openDetail('${c.id}')">
+          ${c.is_urgent?'<span class="urgent-dot"></span>':''}
+          <div class="card-name">${c.full_name}</div>
+          <div class="card-meta">${c.phone||'No phone'} · ${c.location||'No location'}</div>
+          <span class="card-reached">${c.how_reached||'unspecified'}</span>
+        </div>`).join('')}</div></div>`;
+  }).join('');
+}
+
+function renderContactsTable(filter){
+  if(filter)currentFilter=filter;
+  const contacts=currentFilter==='all'?allContacts:allContacts.filter(c=>c.status===currentFilter);
+  const tbody=document.getElementById('contacts-tbody');
+  if(!contacts.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">◎</div><div class="empty-title">No contacts yet</div><div class="empty-sub">Log your first gospel contact to get started.</div></div></td></tr>`;return;}
+  tbody.innerHTML=contacts.map(c=>{
+    const date=new Date(c.created_at).toLocaleDateString('en-UG',{day:'numeric',month:'short'});
+    return`<tr>
+      <td>${c.is_urgent?'<span class="urgent-dot"></span>':''}<span style="font-family:'Cormorant Garamond',serif;font-size:15px;font-weight:600;">${c.full_name}</span></td>
+      <td>${c.phone||'—'}</td><td>${c.location||'—'}</td><td>${c.how_reached||'—'}</td>
+      <td><span class="status-badge status-${c.status}">${STATUS_LABELS[c.status]}</span></td>
+      <td>${date}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="openDetail('${c.id}')">View</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterContacts(filter,el){
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active'); renderContactsTable(filter);
+}
+
+function renderTasks(){
+  const pending=allTasks.filter(t=>t.status==='pending'||t.status==='claimed');
+  const grid=document.getElementById('tasks-grid');
+  if(!pending.length){grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">◷</div><div class="empty-title">No pending follow-ups</div><div class="empty-sub">Tasks auto-create when you log or update a contact.</div></div>`;return;}
+  grid.innerHTML=pending.map(task=>{
+    const c=task.keryx_contacts; const m=task.keryx_team_members;
+    return`<div class="task-card">
+      <div class="task-contact-name">${c?.full_name||'Unknown'}</div>
+      <span class="task-type-badge">${task.task_type}</span>
+      <div class="task-ai">${task.ai_suggestion||'Follow up with this contact.'}</div>
+      ${task.due_date?`<div class="task-due">Due: ${new Date(task.due_date).toLocaleDateString()}</div>`:''}
+      ${m?`<div class="task-due">Assigned: ${m.full_name}</div>`:''}
+      <div class="task-actions">
+        <button class="btn btn-success btn-sm" onclick="completeTask('${task.id}')">✓ Done</button>
+        <button class="btn btn-ghost btn-sm" onclick="openDetail('${c?.id}')">View</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTeam(){
+  const grid=document.getElementById('team-grid');
+  if(!allTeam.length){grid.innerHTML=`<div class="empty-state" style="grid-column:1/-1;"><div class="empty-icon">◉</div><div class="empty-title">No team members yet</div><div class="empty-sub">Add your first evangelist to start assigning follow-ups.</div></div>`;return;}
+  grid.innerHTML=allTeam.map(m=>{
+    const initials=m.full_name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const count=allContacts.filter(c=>c.logged_by===m.id).length;
+    return`<div class="team-card">
+      <div class="team-avatar">${initials}</div>
+      <div class="team-name">${m.full_name}</div>
+      <div class="team-role">${m.role}</div>
+      <div class="team-meta">${m.phone||'—'}</div>
+      <div class="team-meta" style="margin-top:4px;">${m.church_name||''}</div>
+      <div class="team-meta" style="margin-top:12px;color:var(--gold);">${count} contacts logged</div>
+    </div>`;
+  }).join('');
+}
+
+async function openDetail(id){
+  const contact=allContacts.find(c=>c.id===id);
+  if(!contact)return;
+  const{data:notes}=await sb.from('keryx_contact_notes').select('*,keryx_team_members(full_name)').eq('contact_id',id).order('created_at',{ascending:false});
+  const member=allTeam.find(t=>t.id===contact.logged_by);
+  const suggestion=aiSuggestion(contact);
+  const teamOptions=allTeam.map(t=>`<option value="${t.id}">${t.full_name}</option>`).join('');
+  document.getElementById('detail-name').textContent=contact.full_name;
+  document.getElementById('detail-body').innerHTML=`
+    <div class="detail-section">
+      <div class="detail-section-title">Contact Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div><div class="form-label">Phone</div><div style="font-size:13px;">${contact.phone||'—'}</div></div>
+        <div><div class="form-label">Location</div><div style="font-size:13px;">${contact.location||'—'}</div></div>
+        <div><div class="form-label">Reached Via</div><div style="font-size:13px;">${contact.how_reached||'—'}</div></div>
+        <div><div class="form-label">Logged By</div><div style="font-size:13px;">${member?.full_name||'—'}</div></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Status</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${STATUSES.map(s=>`<button class="filter-btn ${contact.status===s?'active':''}" onclick="updateStatus('${id}','${s}',this)">${STATUS_LABELS[s]}</button>`).join('')}
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">AI Suggested Action</div>
+      <div class="ai-suggestion"><span class="ai-badge">✦ Keryx AI</span>${suggestion}</div>
+    </div>
+    ${contact.notes?`<div class="detail-section"><div class="detail-section-title">Original Notes</div><div style="font-size:12px;line-height:1.6;color:var(--stone);">${contact.notes}</div></div>`:''}
+    <div class="detail-section">
+      <div class="detail-section-title">Interaction Log</div>
+      <div class="notes-list">
+        ${notes?.length?notes.map(n=>`<div class="note-item"><div class="note-meta">${n.interaction_type?.toUpperCase()} · ${new Date(n.created_at).toLocaleDateString()} · ${n.keryx_team_members?.full_name||'Unknown'}</div><div class="note-text">${n.note}</div></div>`).join(''):'<div style="font-size:11px;color:var(--stone-light);">No interactions logged yet.</div>'}
+      </div>
+      <div style="margin-top:14px;">
+        <div class="form-row" style="margin-bottom:8px;">
+          <select class="form-select" id="note-type"><option value="note">Note</option><option value="call">Call</option><option value="visit">Visit</option><option value="message">Message</option></select>
+          <select class="form-select" id="note-by">${teamOptions}</select>
+        </div>
+        <textarea class="form-textarea" id="note-text" placeholder="Log an interaction or note..." style="min-height:60px;"></textarea>
+        <button class="btn btn-primary" style="margin-top:8px;width:100%;" onclick="addNote('${id}')">+ Log Interaction</button>
+      </div>
+    </div>`;
+  document.getElementById('detail-footer').innerHTML=`
+    <button class="btn btn-danger btn-sm" onclick="deleteContact('${id}')">Delete</button>
+    <button class="btn btn-ghost btn-sm" onclick="closeModal('detail-modal')">Close</button>`;
+  openModal('detail-modal');
+}
+
+async function updateStatus(id,status,el){
+  await sb.from('keryx_contacts').update({status,updated_at:new Date().toISOString()}).eq('id',id);
+  allContacts=allContacts.map(c=>c.id===id?{...c,status}:c);
+  document.querySelectorAll('#detail-body .filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  await createFollowUpTask(id,status);
+  updateStats(); toast('Status updated');
+}
+
+async function createFollowUpTask(contactId,status){
+  const contact=allContacts.find(c=>c.id===contactId);
+  if(!contact)return;
+  const suggestion=aiSuggestion({...contact,status});
+  const dueDate=new Date(Date.now()+3*86400000).toISOString().split('T')[0];
+  await sb.from('keryx_follow_up_tasks').insert({contact_id:contactId,task_type:status==='decision'?'discipleship':'follow_up',ai_suggestion:suggestion,due_date:dueDate,status:'pending'});
+  const{data}=await sb.from('keryx_follow_up_tasks').select('*,keryx_contacts(*),keryx_team_members(*)').order('created_at',{ascending:false});
+  allTasks=data||[];
+}
+
+async function addNote(contactId){
+  const note=document.getElementById('note-text').value.trim();
+  if(!note){toast('Please enter a note','error');return;}
+  await sb.from('keryx_contact_notes').insert({contact_id:contactId,note,interaction_type:document.getElementById('note-type').value,logged_by:document.getElementById('note-by').value||null});
+  toast('Interaction logged'); openDetail(contactId);
+}
+
+async function deleteContact(id){
+  if(!confirm('Delete this contact? This cannot be undone.'))return;
+  await sb.from('keryx_contacts').delete().eq('id',id);
+  allContacts=allContacts.filter(c=>c.id!==id);
+  closeModal('detail-modal'); updateStats(); renderPipeline(); toast('Contact deleted');
+}
+
+async function completeTask(taskId){
+  await sb.from('keryx_follow_up_tasks').update({status:'completed',completed_at:new Date().toISOString()}).eq('id',taskId);
+  allTasks=allTasks.filter(t=>t.id!==taskId); renderTasks(); toast('Task marked complete');
+}
+
+function populateTeamSelect(id){
+  document.getElementById(id).innerHTML='<option value="">— Select team member —</option>'+allTeam.map(t=>`<option value="${t.id}">${t.full_name}</option>`).join('');
+}
+
+async function saveContact(){
+  const name=document.getElementById('f-name').value.trim();
+  const how=document.getElementById('f-how').value;
+  if(!name){toast('Name is required','error');return;}
+  if(!how){toast('Select how they were reached','error');return;}
+  const{data,error}=await sb.from('keryx_contacts').insert({full_name:name,phone:document.getElementById('f-phone').value.trim()||null,location:document.getElementById('f-location').value.trim()||null,how_reached:how,status:document.getElementById('f-status').value,notes:document.getElementById('f-notes').value.trim()||null,logged_by:document.getElementById('f-loggedby').value||null,is_urgent:document.getElementById('f-urgent').checked}).select();
+  if(error){toast('Failed to save','error');return;}
+  allContacts.unshift(data[0]);
+  await createFollowUpTask(data[0].id,data[0].status);
+  closeModal('add-modal'); updateStats(); renderPipeline();
+  ['f-name','f-phone','f-location','f-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-how').value=''; document.getElementById('f-urgent').checked=false;
+  toast('Contact logged successfully');
+}
+
+async function saveTeamMember(){
+  const name=document.getElementById('tm-name').value.trim();
+  if(!name){toast('Name is required','error');return;}
+  const{data,error}=await sb.from('keryx_team_members').insert({full_name:name,role:document.getElementById('tm-role').value,phone:document.getElementById('tm-phone').value.trim()||null,email:document.getElementById('tm-email').value.trim()||null,church_name:document.getElementById('tm-church').value.trim()||null}).select();
+  if(error){toast('Failed to add member','error');return;}
+  allTeam.push(data[0]); closeModal('team-modal');
+  ['tm-name','tm-phone','tm-email','tm-church'].forEach(id=>document.getElementById(id).value='');
+  toast('Team member added'); renderTeam();
+}
+</script>
+</body>
+</html>
